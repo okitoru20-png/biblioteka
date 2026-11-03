@@ -38,6 +38,18 @@ body{background-color:#2a1709;background-image:url("data:image/svg+xml;utf8,<svg
 .sw i{width:36px;height:36px;border-radius:50%;border:2px solid #0004}
 .btn{width:100%;padding:12px;margin-top:8px;border:0;border-radius:10px;background:#6b4423;color:#fff;font-size:15px}
 .btn.g{background:#999}
+#txt span{display:block}
+#tocb{left:50%;transform:translateX(-50%);width:auto;border-radius:22px;padding:0 16px;font-size:15px}
+#bm{right:64px}
+#toc{position:absolute;z-index:8;left:0;right:0;bottom:0;top:10%;background:#fffaf0;color:#333;border-radius:18px 18px 0 0;padding:14px 16px calc(env(safe-area-inset-bottom,0px) + 12px);display:none;flex-direction:column;box-shadow:0 -4px 14px #0006;font-family:system-ui,sans-serif}
+.tt{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.tt button{border:0;border-radius:18px;padding:9px 14px;font-size:15px;background:#e6dcc8;color:#333}
+.tt button.on{background:#6b4423;color:#fff}.tt span{margin-left:auto;font-size:14px;opacity:.7}
+#tlist{overflow:auto;flex:1;margin-top:8px}
+.ti{position:relative;padding:12px 40px 12px 6px;border-bottom:1px solid #0002;font-size:15px}
+.ti.cur{background:#f0e2c0;font-weight:600}
+.ti small{opacity:.7}
+.ti .x{position:absolute;right:4px;top:8px;border:0;background:none;font-size:18px;color:#a00}
 </style></head><body>
 <div id="lib">
  <div class="top"><label class="add" for="bf" id="addb" style="display:inline-block">＋ Добавить книгу</label></div>
@@ -50,6 +62,9 @@ body{background-color:#2a1709;background-image:url("data:image/svg+xml;utf8,<svg
  <div id="txt"></div>
  <button class="fab" id="back">←</button>
  <button class="fab" id="gear">⚙</button>
+ <button class="fab" id="tocb">☰ Главы</button>
+ <button class="fab" id="bm">🔖</button>
+ <div id="toc"><div class="tt"><button id="tc1" class="on">Главы</button><button id="tm1">Закладки</button><span id="tpc"></span><button id="tx">✕</button></div><button class="btn" id="addm" style="display:none;margin:0">🔖 Добавить закладку здесь</button><div id="tlist"></div></div>
  <div id="set">
   <h3>Настройки</h3>
   <label>Размер шрифта: <b id="fv"></b></label>
@@ -152,24 +167,52 @@ function lum(h){const n=parseInt(h.slice(1),16);return(.299*(n>>16)+.587*(n>>8&2
 let CH=[],loaded=0;
 async function openBook(b){
  cur=b;$('lib').style.visibility='hidden';$('rd').style.display='block';$('txt').textContent='Загрузка…';apply();hideUi();
- const t=(await get('t'+b.id))||b.text||'';
- CH=[];for(let i=0;i<t.length;){let e=Math.min(i+8000,t.length);const n=t.indexOf('\n',e);e=(n<0||n-e>2000)?e:n+1;CH.push(t.slice(i,e));i=e}
- const el=$('txt'),pos=b.pos||0;el.textContent='';loaded=0;more();
- while(loaded<CH.length&&el.scrollHeight<pos+el.clientHeight*2)more();
- el.scrollTop=pos;
+ const t=((await get('t'+b.id))||b.text||'').replace(/\r/g,'');TXT=t;
+ CH=[];CHs=[];for(let i=0;i<t.length;){let e=Math.min(i+8000,t.length);const n=t.indexOf('\n',e);e=(n<0||n-e>2000)?e:n+1;CH.push(t.slice(i,e));CHs.push(i);i=e}
+ CHAP=[];const re=/^[ \t]*((?:глава|часть|том|книга|пролог|эпилог|предисловие|chapter|part|book|volume|prologue|epilogue)(?=[\s.:\-–—\dIVXLC]|$)[^\n]{0,70})[ \t]*$/gim;let m;
+ while((m=re.exec(t))&&CHAP.length<800)CHAP.push({o:m.index+m[0].indexOf(m[1]),n:m[1].trim()});
+ if(!CHAP.length)for(let i=0;i<t.length;i+=30000)CHAP.push({o:i,n:'Часть '+(i/30000+1)});
+ else if(CHAP[0].o>200)CHAP.unshift({o:0,n:'Начало'});
+ const el=$('txt');el.textContent='';loaded=0;more();
+ if(b.off!=null)goOff(b.off);else{const pos=b.pos||0;while(loaded<CH.length&&el.scrollHeight<pos+el.clientHeight*2)more();el.scrollTop=pos}
 }
-function more(){if(loaded<CH.length)$('txt').appendChild(document.createTextNode(CH[loaded++]))}
-function hideUi(){$('gear').style.display=$('back').style.display='none'}
-$('txt').addEventListener('scroll',()=>{if(cur){const el=$('txt');if(el.scrollTop+el.clientHeight*3>el.scrollHeight)more();cur.pos=el.scrollTop;clearTimeout(window._t);window._t=setTimeout(()=>set('books',books),600)}});
+let CHs=[],TXT='',CHAP=[];
+function more(){if(loaded<CH.length){const s=document.createElement('span');s.textContent=CH[loaded++];$('txt').appendChild(s)}}
+function goOff(o){const el=$('txt');let i=CHs.length-1;for(let k=0;k<CHs.length;k++){if(CHs[k+1]===undefined||CHs[k+1]>o){i=k;break}}
+ while(loaded<=i)more();
+ const s=el.children[i];if(!s)return;const len=(CHs[i+1]===undefined?TXT.length:CHs[i+1])-CHs[i];
+ el.scrollTop=Math.max(0,s.offsetTop+(o-CHs[i])/Math.max(1,len)*s.offsetHeight-60)}
+function curOff(){const el=$('txt'),y=el.scrollTop+60,c=el.children;let i=0;for(let k=0;k<c.length;k++){if(c[k].offsetTop<=y)i=k;else break}
+ const s=c[i];if(!s)return 0;const len=(CHs[i+1]===undefined?TXT.length:CHs[i+1])-CHs[i];
+ return Math.round(CHs[i]+Math.min(1,Math.max(0,(y-s.offsetTop)/Math.max(1,s.offsetHeight)))*len)}
+function chapAt(o){let n='';for(const c of CHAP){if(c.o<=o)n=c.n;else break}return n}
+function ui(v){['gear','back','tocb','bm'].forEach(i=>$(i).style.display=v?'block':'none')}
+function hideUi(){ui(0)}
+$('txt').addEventListener('scroll',()=>{if(cur){const el=$('txt');if(el.scrollTop+el.clientHeight*3>el.scrollHeight)more();cur.pos=el.scrollTop;clearTimeout(window._t);window._t=setTimeout(()=>{cur.off=curOff();set('books',books)},600)}});
 $('txt').addEventListener('click',e=>{
  const y=e.clientY/innerHeight,x=e.clientX/innerWidth;
- if(x>.25&&x<.75&&y>.25&&y<.75){const v=$('gear').style.display==='block';$('gear').style.display=$('back').style.display=v?'none':'block'}
+ if(x>.25&&x<.75&&y>.25&&y<.75){ui($('gear').style.display!=='block')}
  else hideUi();
 });
-$('back').onclick=async()=>{await set('books',books);$('rd').style.display='none';$('set').style.display='none';$('lib').style.visibility='visible';$('txt').textContent='';cur=null};
+$('back').onclick=async()=>{if(cur)cur.off=curOff();await set('books',books);$('toc').style.display='none';$('rd').style.display='none';$('set').style.display='none';$('lib').style.visibility='visible';$('txt').textContent='';cur=null};
 $('gear').onclick=()=>{$('set').style.display='block'};
+let tab='c';
+function drawToc(){const o=curOff(),L=Math.max(1,TXT.length);$('tpc').textContent=Math.round(o/L*100)+'%';
+ $('tc1').className=tab==='c'?'on':'';$('tm1').className=tab==='m'?'on':'';$('addm').style.display=tab==='m'?'block':'none';
+ let h='';
+ if(tab==='c'){let ci=-1;CHAP.forEach((c,i)=>{if(c.o<=o)ci=i});CHAP.forEach((c,i)=>{h+=`<div class="ti${i===ci?' cur':''}" data-o="${c.o}">${esc(c.n)}</div>`})}
+ else{(cur.marks||[]).forEach((m,i)=>{h+=`<div class="ti" data-o="${m.o}"><b>${esc(m.c||'Закладка')}</b> · ${Math.round(m.o/L*100)}%<br><small>${esc(m.t)}</small><button class="x" data-d="${i}">✕</button></div>`});if(!h)h='<div style="padding:16px;opacity:.6">Закладок пока нет</div>'}
+ $('tlist').innerHTML=h;const c=$('tlist').querySelector('.cur');if(c)c.scrollIntoView({block:'center'})}
+async function addMark(){const o=curOff();cur.marks=cur.marks||[];cur.marks.push({o,t:TXT.substr(o,80).replace(/\s+/g,' ').trim()||'…',c:chapAt(o)});await set('books',books)}
+$('tocb').onclick=()=>{tab='c';$('toc').style.display='flex';drawToc()};
+$('tc1').onclick=()=>{tab='c';drawToc()};$('tm1').onclick=()=>{tab='m';drawToc()};
+$('tx').onclick=()=>{$('toc').style.display='none';hideUi()};
+$('addm').onclick=async()=>{await addMark();drawToc()};
+$('bm').onclick=async()=>{await addMark();$('bm').textContent='✓';setTimeout(()=>$('bm').textContent='🔖',1000)};
+$('tlist').onclick=async e=>{const d=e.target.dataset.d;if(d!==undefined){cur.marks.splice(+d,1);await set('books',books);drawToc();return}const t=e.target.closest('.ti');if(t){goOff(+t.dataset.o);$('toc').style.display='none';hideUi()}};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&cur){cur.off=curOff();set('books',books)}});
 $('close').onclick=()=>{$('set').style.display='none';hideUi()};
-$('fs').oninput=e=>{S.fs=+e.target.value;apply();set('S',S)};
+$('fs').oninput=e=>{const o=cur?curOff():0;S.fs=+e.target.value;apply();if(cur)goOff(o);set('S',S)};
 $('dim').oninput=e=>{S.dim=+e.target.value;apply();set('S',S)};
 (()=>{const a=document.createElement('i');a.textContent='Авто';a.style.cssText='width:auto;border-radius:18px;padding:8px 12px;font-size:13px;font-style:normal;background:#eee';a.onclick=()=>{S.tc=null;apply();set('S',S)};$('tcs').appendChild(a);
 ['#ffffff','#f5e6c8','#ffe27a','#9be7ff','#222222','#000000'].forEach(c=>{const i=document.createElement('i');i.style.background=c;i.onclick=()=>{S.tc=c;apply();set('S',S)};$('tcs').appendChild(i)});
